@@ -1,0 +1,17 @@
+{
+  "model_name": "AeroTwin-HUMS Model 5 RUL",
+  "model_type": "ExtraTreesRegressor",
+  "n_estimators": 2000,
+  "max_features": 0.7,
+  "min_samples_leaf": 2,
+  "random_state": 42,
+  "n_training_samples": 1100,
+  "n_features": 52,
+  "target": "rul_target_cycles",
+  "unit": "cycles",
+  "cycle_definition": "1 cycle = 60 seconds",
+  "validation_MAE_cycles": 17.1136,
+  "validation_RMSE_cycles": 36.6988,
+  "validation_R2": 0.9998,
+  "feature_set": "RAW_TELEMETRY_ONLY"
+}

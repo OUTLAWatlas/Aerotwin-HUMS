@@ -1,0 +1,21 @@
+{
+  "model": "ExtraTreesRegressor",
+  "n_estimators": 2000,
+  "max_features": 0.7,
+  "min_samples_leaf": 2,
+  "random_state": 42,
+  "target": "rul_target_cycles",
+  "target_unit": "cycles",
+  "cycle_seconds": 60,
+  "n_samples": 1100,
+  "n_features": 51,
+  "feature_set": "CURRENT_51",
+  "target_leakage_removed": true,
+  "validation": {
+    "method": "5-fold GroupKFold by mission",
+    "MAE_cycles": 805.286401,
+    "RMSE_cycles": 1343.147667,
+    "R2": 0.760164
+  },
+  "important_limitation": "Model trained and validated on synthetic mission telemetry. Time/progress features are intentionally retained because removing them substantially reduced grouped validation performance."
+}

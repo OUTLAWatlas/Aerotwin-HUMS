@@ -1,0 +1,154 @@
+# Config-driven model orchestration rules.
+# The orchestration engine (app/orchestration/router.py) reads this file to
+# decide which model(s) to call -- no routing decisions are hardcoded in code.
+#
+# Rule evaluation order: rules are tried top-to-bottom; the first rule whose
+# `when` clause matches the request context (sensor availability, mission
+# risk tier, AND drone_type) is used. `sequence` lists the models to call, in
+# order, with fallback semantics.
+
+rules:
+  # --- Full AeroTwin telemetry (all 13 calibrated piston-engine channels)
+  #     available -> route to the AeroTwin physics twin. One call answers
+  #     anomaly detection, fault diagnosis AND RUL together (see
+  #     "combined_assessment" below and app/models_serving/aerotwin_adapter.py)
+  #     -- this is NOT three separate model calls, because AeroTwin is
+  #     stateful per engine and must be stepped exactly once per real sample.
+  #     Applies to both drone_types: the physics model is per-engine, not
+  #     per-airframe, so a dual_engine drone just runs two independent
+  #     AeroTwin sessions (one per engine_id).
+  - name: "aerotwin_full_telemetry"
+    when:
+      required_sensor_types:
+        - "egt_a"
+        - "egt_b"
+        - "oil_pressure"
+        - "sensor_4"
+        - "rpm"
+        - "map_kpa"
+        - "fuel_flow"
+        - "vibration"
+        - "turbine_inlet_temp_a"
+        - "turbine_inlet_temp_b"
+        - "sensor_11"
+        - "cht_a"
+        - "cht_b"
+      mission_risk_tier: ["low", "medium", "high", "critical"]
+      drone_types: ["dual_engine", "single_engine"]
+    sequence:
+      - model: "aerotwin_physics_v1"
+        task: "combined_assessment"
+        # On low confidence (= low anomaly_score -- see
+        # aerotwin_adapter._overall_confidence), there's nothing more urgent
+        # to fall back to: a low score IS the answer "engine looks nominal".
+        # Fallback only fires on outright failure/timeout, not low confidence.
+        on_low_confidence_below: 0.0
+        fallback: "ml_anomaly_ensemble_v3"
+
+  # --- Legacy path: generic sensor set (no full AeroTwin telemetry), e.g. a
+  #     ground test rig or partial datalink. Falls back to the toy physics
+  #     residual + ML models rather than refusing to assess the engine at
+  #     all.
+  - name: "generic_sensors_high_risk"
+    when:
+      required_sensor_types: ["vibration", "temperature", "pressure"]
+      mission_risk_tier: ["high", "critical"]
+      drone_types: ["dual_engine", "single_engine"]
+    sequence:
+      - model: "physics_residual_v2"
+        task: "anomaly_detection"
+        on_low_confidence_below: 0.6
+        fallback: "ml_anomaly_ensemble_v3"
+      - model: "ml_fault_classifier_v4"
+        task: "fault_diagnosis"
+        on_low_confidence_below: 0.5
+        fallback: "ml_fault_classifier_v3_legacy"
+      - model: "ml_rul_estimator_v2"
+        task: "rul_estimation"
+        on_low_confidence_below: 0.4
+        fallback: null
+
+  - name: "generic_sensors_normal_risk"
+    when:
+      required_sensor_types: ["vibration", "temperature", "pressure"]
+      mission_risk_tier: ["low", "medium"]
+      drone_types: ["dual_engine", "single_engine"]
+    sequence:
+      - model: "ml_anomaly_ensemble_v3"
+        task: "anomaly_detection"
+        on_low_confidence_below: 0.5
+        fallback: "physics_residual_v2"
+      - model: "ml_fault_classifier_v4"
+        task: "fault_diagnosis"
+        on_low_confidence_below: 0.5
+        fallback: null
+      - model: "ml_rul_estimator_v2"
+        task: "rul_estimation"
+        on_low_confidence_below: 0.4
+        fallback: null
+
+  - name: "vibration_only_any_drone_type"
+    when:
+      required_sensor_types: ["vibration"]
+      mission_risk_tier: ["low", "medium", "high", "critical"]
+      drone_types: ["dual_engine", "single_engine"]
+    sequence:
+      - model: "physics_residual_v2"
+        task: "anomaly_detection"
+        on_low_confidence_below: 0.6
+        fallback: "ml_anomaly_ensemble_v3"
+
+  - name: "minimal_data_fallback"
+    when:
+      required_sensor_types: []   # matches whatever is left -- catch-all
+      mission_risk_tier: ["low", "medium", "high", "critical"]
+      drone_types: ["dual_engine", "single_engine"]
+    sequence:
+      - model: "ml_anomaly_ensemble_v3"
+        task: "anomaly_detection"
+        on_low_confidence_below: 0.3
+        fallback: null
+
+# Model registry metadata: where each model is loaded from and its type.
+models:
+  aerotwin_physics_v1:
+    type: "physics_stateful"
+    module: "app.models_serving.aerotwin_adapter"
+    entrypoint: "AeroTwinPhysicsModel"
+    version: "1.0.0"
+    artifact_path: null   # uses the vendored, version-pinned calibration.json
+
+  physics_residual_v2:
+    type: "physics"
+    module: "app.models_serving.physics_models"
+    entrypoint: "PhysicsResidualModel"
+    version: "2.0.0"
+    artifact_path: "models/physics_residual_v2.json"
+
+  ml_anomaly_ensemble_v3:
+    type: "ml"
+    module: "app.models_serving.ml_models"
+    entrypoint: "AnomalyEnsembleModel"
+    version: "3.1.0"
+    artifact_path: "models/anomaly_ensemble_v3.joblib"
+
+  ml_fault_classifier_v4:
+    type: "ml"
+    module: "app.models_serving.ml_models"
+    entrypoint: "FaultClassifierModel"
+    version: "4.0.2"
+    artifact_path: "models/fault_classifier_v4.joblib"
+
+  ml_fault_classifier_v3_legacy:
+    type: "ml"
+    module: "app.models_serving.ml_models"
+    entrypoint: "FaultClassifierModel"
+    version: "3.5.1"
+    artifact_path: "models/fault_classifier_v3.joblib"
+
+  ml_rul_estimator_v2:
+    type: "ml"
+    module: "app.models_serving.ml_models"
+    entrypoint: "RULEstimatorModel"
+    version: "2.2.0"
+    artifact_path: "models/rul_estimator_v2.joblib"

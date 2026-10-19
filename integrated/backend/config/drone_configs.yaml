@@ -1,0 +1,35 @@
+# Defines the supported drone/engine configurations. The orchestration and
+# ingestion layers resolve drone_id -> (drone_type, engine_ids) from this file
+# rather than hardcoding drone/engine logic in Python.
+#
+# Three functional piston-engine configurations are supported:
+#   1. One drone with two piston engines (dual_engine)
+#   2. Two drones, each with one piston engine (single_engine x2)
+
+drones:
+  - drone_id: "drone-01"
+    drone_type: "dual_engine"
+    engine_type: "piston"
+    engines:
+      - engine_id: "drone-01-eng1"
+        position: "left"
+        can_arbitration_id_base: 0x100   # CAN frames 0x100-0x10F -> this engine
+      - engine_id: "drone-01-eng2"
+        position: "right"
+        can_arbitration_id_base: 0x110   # CAN frames 0x110-0x11F -> this engine
+
+  - drone_id: "drone-02"
+    drone_type: "single_engine"
+    engine_type: "piston"
+    engines:
+      - engine_id: "drone-02-eng1"
+        position: "center"
+        can_arbitration_id_base: 0x200
+
+  - drone_id: "drone-03"
+    drone_type: "single_engine"
+    engine_type: "piston"
+    engines:
+      - engine_id: "drone-03-eng1"
+        position: "center"
+        can_arbitration_id_base: 0x300

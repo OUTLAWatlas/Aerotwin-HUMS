@@ -1,0 +1,52 @@
+# RBAC permission matrix.
+# "*" grants all permissions for that role.
+roles:
+  admin:
+    - "*"
+
+  engineer:
+    - "predictions:read"
+    - "predictions:write"
+    - "ingestion:write"
+    - "alerts:read"
+    - "alerts:acknowledge"
+    - "missions:read"
+    - "missions:write"
+    - "config:read"
+
+  operator:
+    - "predictions:read"
+    - "ingestion:write"
+    - "alerts:read"
+    - "alerts:acknowledge"
+    - "missions:read"
+
+  # "pilot" mirrors "operator" 1:1 -- it exists because the AeroTwin-HUMS
+  # dashboard's RBAC model (src/auth/permissions.js) hardcodes the role name
+  # "pilot" rather than "operator". Keep the two lists identical; if you
+  # change one, change the other, or the two projects' access levels drift
+  # apart silently.
+  pilot:
+    - "predictions:read"
+    - "ingestion:write"
+    - "alerts:read"
+    - "alerts:acknowledge"
+    - "missions:read"
+
+  viewer:
+    - "predictions:read"
+    - "alerts:read"
+    - "missions:read"
+
+# Permission -> endpoint mapping (documentation reference for API layer)
+# predictions:read      GET  /api/v1/predictions/*
+# predictions:write     POST /api/v1/predict            (body includes drone_id + engine_id)
+# ingestion:write       POST /api/v1/ingest              (body includes drone_id + engine_id)
+# alerts:read           GET  /api/v1/alerts?drone_id=&engine_id=
+# alerts:acknowledge    POST /api/v1/alerts/{id}/ack
+# missions:read         GET  /api/v1/missions/{id}
+#                       GET  /api/v1/missions/{id}/engines/compare  (multi-engine correlation)
+# missions:write        POST /api/v1/missions            (body includes drone_id)
+# config:read           GET  /api/v1/config/models
+#                       GET  /api/v1/config/routing-rules
+#                       GET  /api/v1/config/drones        (drone/engine topology)
